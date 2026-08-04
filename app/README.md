@@ -14,6 +14,11 @@ The `+ ADD` button in the dashboard header opens a full-screen, three-step flow
 for selecting the BLE device, confirming its labeled name and PoP fields, and
 selecting the scanned Wi-Fi network. The Wi-Fi password field is shown only for
 secured networks.
+
+The home screen presents each device as a card with its connectivity status and
+latest internal chip temperature. Selecting a card opens the full-screen device
+history view, where the temperature line chart can show the last 30 minutes,
+1 hour, 6 hours, or 24 hours.
 Its Expo deep-link scheme is `edgez-devtools`, so application links begin with
 `edgez-devtools://`.
 

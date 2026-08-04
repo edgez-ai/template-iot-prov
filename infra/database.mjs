@@ -29,4 +29,7 @@ export function installDatabase() {
   ensure("telemetry device index",
     ["tables-db", "get-index", ...telemetry, "--key", "device-id"],
     ["tables-db", "create-index", ...telemetry, "--key", "device-id", "--type", "key", "--columns", "deviceId"]);
+  ensure("telemetry device history index",
+    ["tables-db", "get-index", ...telemetry, "--key", "device-history"],
+    ["tables-db", "create-index", ...telemetry, "--key", "device-history", "--type", "key", "--columns", "deviceId", "receivedAt", "--orders", "ASC", "ASC"]);
 }
