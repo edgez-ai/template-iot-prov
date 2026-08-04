@@ -7,15 +7,15 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
-#include "esp_mqtt_client.h"
+#include "mqtt_client.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "nvs.h"
 #include "nvs_flash.h"
-#include "wifi_provisioning/manager.h"
-#include "wifi_provisioning/scheme_ble.h"
+#include "network_provisioning/manager.h"
+#include "network_provisioning/scheme_ble.h"
 
 namespace {
 constexpr char kTag[] = "iot_prov";
@@ -36,8 +36,9 @@ struct MqttConfig {
 EventGroupHandle_t state_events;
 esp_mqtt_client_handle_t mqtt_client;
 MqttConfig mqtt_config{};
-char provisioning_name[20]{};
+char provisioning_name[32]{};
 char provisioning_pop[16]{};
+char device_serial[24]{};
 
 bool valid_serial(const char *value) {
   if (!value) return false;
@@ -113,6 +114,7 @@ esp_err_t mqtt_config_handler(uint32_t, const uint8_t *input, ssize_t input_leng
       copy_json_string(root, "projectId", candidate.project_id, sizeof(candidate.project_id)) &&
       copy_json_string(root, "channel", candidate.channel, sizeof(candidate.channel));
   valid = valid && valid_serial(candidate.username) &&
+          std::strcmp(candidate.username, device_serial) == 0 &&
           std::strchr(candidate.channel, '/') == nullptr;
 
   esp_err_t result = valid ? save_mqtt_config(candidate) : ESP_ERR_INVALID_ARG;
@@ -133,10 +135,13 @@ esp_err_t mqtt_config_handler(uint32_t, const uint8_t *input, ssize_t input_leng
   return result;
 }
 
-void make_provisioning_identity() {
+void make_device_identity() {
   uint8_t mac[6]{};
   ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_STA));
-  std::snprintf(provisioning_name, sizeof(provisioning_name), "IOT_%02X%02X%02X", mac[3], mac[4], mac[5]);
+  std::snprintf(device_serial, sizeof(device_serial),
+                "%02X%02X%02X%02X%02X%02X",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  std::snprintf(provisioning_name, sizeof(provisioning_name), "PROV_%s", device_serial);
   std::snprintf(provisioning_pop, sizeof(provisioning_pop), "%02x%02x%02x%02x", mac[2], mac[3], mac[4], mac[5]);
 }
 
@@ -159,20 +164,34 @@ void start_mqtt() {
   ESP_ERROR_CHECK(esp_mqtt_client_start(mqtt_client));
 }
 
-void mqtt_event_handler(void *, esp_event_base_t, int32_t event_id, void *) {
-  if (event_id != MQTT_EVENT_CONNECTED) return;
-  char topic[384]{};
-  std::snprintf(topic, sizeof(topic), "projects/%s/devices/%s/telemetry/%s",
-                mqtt_config.project_id, mqtt_config.username, mqtt_config.channel);
-  const char *payload = "{\"status\":\"online\"}";
-  const int message_id = esp_mqtt_client_publish(mqtt_client, topic, payload, 0, 1, 0);
-  ESP_LOGI(kTag, "MQTT connected; published %s as message %d", topic, message_id);
+void mqtt_event_handler(void *, esp_event_base_t, int32_t event_id, void *event_data) {
+  auto *event = static_cast<esp_mqtt_event_handle_t>(event_data);
+  if (event_id == MQTT_EVENT_CONNECTED) {
+    char telemetry_topic[384]{};
+    char command_topic[384]{};
+    std::snprintf(telemetry_topic, sizeof(telemetry_topic),
+                  "projects/%s/devices/%s/telemetry/%s",
+                  mqtt_config.project_id, mqtt_config.username, mqtt_config.channel);
+    std::snprintf(command_topic, sizeof(command_topic),
+                  "projects/%s/devices/%s/commands/#",
+                  mqtt_config.project_id, mqtt_config.username);
+    const int subscription_id = esp_mqtt_client_subscribe(mqtt_client, command_topic, 1);
+    const int publish_id = esp_mqtt_client_publish(
+        mqtt_client, telemetry_topic, "{\"status\":\"online\"}", 0, 1, 0);
+    ESP_LOGI(kTag, "MQTT connected; subscribed %s (%d), published telemetry (%d)",
+             command_topic, subscription_id, publish_id);
+  } else if (event_id == MQTT_EVENT_DATA && event) {
+    const int topic_length = event->topic_len < 300 ? event->topic_len : 300;
+    const int data_length = event->data_len < 512 ? event->data_len : 512;
+    ESP_LOGI(kTag, "Command received topic=%.*s payload=%.*s",
+             topic_length, event->topic, data_length, event->data);
+  }
 }
 
 void event_handler(void *, esp_event_base_t event_base, int32_t event_id, void *event_data) {
-  if (event_base == WIFI_PROV_EVENT) {
-    if (event_id == WIFI_PROV_CRED_FAIL) wifi_prov_mgr_reset_sm_state_on_failure();
-    if (event_id == WIFI_PROV_END) wifi_prov_mgr_deinit();
+  if (event_base == NETWORK_PROV_EVENT) {
+    if (event_id == NETWORK_PROV_WIFI_CRED_FAIL) network_prov_mgr_reset_wifi_sm_state_on_failure();
+    if (event_id == NETWORK_PROV_END) network_prov_mgr_deinit();
     return;
   }
   if (event_base == WIFI_EVENT) {
@@ -203,34 +222,35 @@ extern "C" void app_main() {
   initialize_nvs();
   ESP_ERROR_CHECK(esp_netif_init());
   ESP_ERROR_CHECK(esp_event_loop_create_default());
+  make_device_identity();
+  ESP_LOGI(kTag, "Device serial: %s", device_serial);
   state_events = xEventGroupCreate();
   ESP_ERROR_CHECK(state_events ? ESP_OK : ESP_ERR_NO_MEM);
   if (load_mqtt_config()) xEventGroupSetBits(state_events, kMqttConfigured);
 
-  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_PROV_EVENT, ESP_EVENT_ANY_ID, event_handler, nullptr));
+  ESP_ERROR_CHECK(esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, event_handler, nullptr));
   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, event_handler, nullptr));
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, event_handler, nullptr));
   esp_netif_create_default_wifi_sta();
   wifi_init_config_t wifi_config = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&wifi_config));
 
-  wifi_prov_mgr_config_t provisioning_config{};
-  provisioning_config.scheme = wifi_prov_scheme_ble;
-  provisioning_config.scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM;
-  ESP_ERROR_CHECK(wifi_prov_mgr_init(provisioning_config));
+  network_prov_mgr_config_t provisioning_config{};
+  provisioning_config.scheme = network_prov_scheme_ble;
+  provisioning_config.scheme_event_handler = NETWORK_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM;
+  ESP_ERROR_CHECK(network_prov_mgr_init(provisioning_config));
 
   bool wifi_provisioned = false;
-  ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&wifi_provisioned));
+  ESP_ERROR_CHECK(network_prov_mgr_is_wifi_provisioned(&wifi_provisioned));
   if (wifi_provisioned) {
-    wifi_prov_mgr_deinit();
+    network_prov_mgr_deinit();
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
   } else {
-    make_provisioning_identity();
     ESP_LOGI(kTag, "BLE provisioning service %s, PoP %s", provisioning_name, provisioning_pop);
-    ESP_ERROR_CHECK(wifi_prov_mgr_endpoint_create(kMqttEndpoint));
-    ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(WIFI_PROV_SECURITY_1, provisioning_pop, provisioning_name, nullptr));
-    ESP_ERROR_CHECK(wifi_prov_mgr_endpoint_register(kMqttEndpoint, mqtt_config_handler, nullptr));
+    ESP_ERROR_CHECK(network_prov_mgr_endpoint_create(kMqttEndpoint));
+    ESP_ERROR_CHECK(network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_1, provisioning_pop, provisioning_name, nullptr));
+    ESP_ERROR_CHECK(network_prov_mgr_endpoint_register(kMqttEndpoint, mqtt_config_handler, nullptr));
     ESP_LOGI(kTag, "Send MQTT JSON to custom endpoint '%s' before applying Wi-Fi credentials", kMqttEndpoint);
   }
 }

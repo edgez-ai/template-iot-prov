@@ -18,22 +18,24 @@ Open `iot-provisioning.code-workspace` in VS Code to work on all five folders.
 
 ## Provisioning flow
 
-1. An operator creates an Appwrite account or signs in from web/mobile.
-2. Web or mobile creates an Appwrite Device with a project-unique serial, then
+1. The ESP32 derives the serial as the 12 uppercase hexadecimal characters of
+   its Wi-Fi MAC and advertises `PROV_<serial>` over BLE.
+2. An operator creates an Appwrite account or signs in from web/mobile.
+3. Web or mobile strips the `PROV_` prefix, creates an Appwrite Device with that
+   project-unique serial, then
    creates its one-time MQTT credential directly through the Devices API.
-3. The device publishes JSON to
+4. The app sends that credential to the firmware's `mqtt-config` BLE endpoint.
+   Firmware connects to `mqtts://mqtt.edgez.ai:8883`, verifying the Let's Encrypt
+   chain with ESP-IDF's trusted root bundle.
+5. The device publishes JSON to
    `projects/<projectId>/devices/<serial>/telemetry/<channel>`. Appwrite's EMQX
    ACL allows that serial to publish only beneath its own telemetry/events
    topics and subscribe only beneath its own commands topic.
-4. Appwrite resolves the MQTT client and emits
+6. Appwrite resolves the MQTT client and emits
    `devices.<deviceId>.mqtt.message.publish` to the Function.
-5. The Function verifies the topic project and serial against the built-in
+7. The Function verifies the topic project and serial against the built-in
    device, then creates a telemetry row carrying its read permissions.
-6. Web and mobile read permitted telemetry directly from TablesDB.
-
-The firmware folder currently provides the ESP-IDF target and stable device
-identity boundary. BLE Wi-Fi transport and MQTT publishing are the next device
-increment.
+8. Web and mobile read permitted telemetry directly from TablesDB.
 
 ## Environment
 
