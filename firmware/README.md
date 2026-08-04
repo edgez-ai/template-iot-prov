@@ -4,7 +4,8 @@ The ESP32-S3 derives its Appwrite serial from the Wi-Fi station MAC as
 `<12 uppercase hex digits>`, for example `AABBCCDDEEFF`. It advertises it as
 `PROV_AABBCCDDEEFF` so the provisioning client can obtain the serial by stripping
 the `PROV_` prefix before creating the Appwrite Device. It provisions Wi-Fi
-through ESP-IDF BLE provisioning and exposes a
+through ESP-IDF BLE provisioning with the example proof of possession (PoP)
+`abcd1234` and exposes a
 custom `mqtt-config` endpoint. Send this JSON before applying Wi-Fi credentials:
 
 ```json

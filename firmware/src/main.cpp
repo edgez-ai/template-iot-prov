@@ -179,7 +179,7 @@ void make_device_identity() {
                 "%02X%02X%02X%02X%02X%02X",
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   std::snprintf(provisioning_name, sizeof(provisioning_name), "PROV_%s", device_serial);
-  std::snprintf(provisioning_pop, sizeof(provisioning_pop), "%02x%02x%02x%02x", mac[2], mac[3], mac[4], mac[5]);
+  strlcpy(provisioning_pop, "abcd1234", sizeof(provisioning_pop));
 }
 
 void mqtt_event_handler(void *, esp_event_base_t, int32_t, void *);
