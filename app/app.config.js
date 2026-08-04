@@ -18,6 +18,7 @@ module.exports = {
   expo: {
     name: appName,
     slug: appName,
+    scheme: "edgez-devtools",
     version: "1.0.0",
     orientation: "portrait",
     userInterfaceStyle: "light",

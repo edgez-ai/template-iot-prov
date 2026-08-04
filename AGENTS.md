@@ -53,3 +53,6 @@ Committed `.env.local` contains only non-secret resource IDs and timing values.
 
 Only run `infra/npm run deploy` when the user explicitly asks to change remote
 Appwrite state.
+`cd infra && npm run clean` deletes the template's deterministic remote
+resources but deliberately preserves project users, Devices, and global auth
+method settings. Do not execute it unless the user explicitly requests cleanup.

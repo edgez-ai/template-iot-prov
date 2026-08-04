@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "deploy": "node install-appwrite.mjs",
-    "check": "node --check appwrite.mjs && node --check auth.mjs && node --check database.mjs && node --check function.mjs && node --check site.mjs && node --check install-appwrite.mjs"
+    "clean": "node clean-appwrite.mjs",
+    "check": "node --check appwrite.mjs && node --check auth.mjs && node --check database.mjs && node --check function.mjs && node --check site.mjs && node --check install-appwrite.mjs && node --check clean-appwrite.mjs"
   },
   "dependencies": { "appwrite-cli": "^20.0.0" }
 }

@@ -81,3 +81,6 @@ Install dependencies in `site/`, `app/`, `function/`, and `infra/`, then run:
 
 Remote installation is intentionally separate: run `cd infra && npm run deploy`
 only when you intend to provision or update Appwrite resources.
+Run `cd infra && npm run clean` to remove this template's Site, Function,
+database, proxy rule, and auth platforms. Cleanup preserves project users,
+Devices, and project-wide authentication settings.
