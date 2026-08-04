@@ -16,7 +16,7 @@ export function installDatabase() {
   ensure("telemetry table",
     ["tables-db", "get-table", ...telemetry],
     ["tables-db", "create-table", ...telemetry, "--name", "Telemetry", "--row-security", "true"]);
-  run(["tables-db", "update-table", ...telemetry, "--permissions", "--row-security", "true"]);
+  run(["tables-db", "update-table", ...telemetry, "--row-security", "true"]);
   stringColumn("deviceId", "36");
   stringColumn("serial", "36");
   stringColumn("channel", "160");
