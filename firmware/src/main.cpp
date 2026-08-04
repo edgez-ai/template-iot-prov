@@ -3,6 +3,8 @@
 #include <cstring>
 
 #include "cJSON.h"
+#include "display.h"
+#include "driver/gpio.h"
 #include "driver/temperature_sensor.h"
 #include "esp_crt_bundle.h"
 #include "esp_event.h"
@@ -10,6 +12,7 @@
 #include "esp_mac.h"
 #include "mqtt_client.h"
 #include "esp_netif.h"
+#include "esp_system.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -28,6 +31,8 @@ constexpr TickType_t kTemperaturePublishInterval = pdMS_TO_TICKS(30000);
 constexpr EventBits_t kWifiConnected = BIT0;
 constexpr EventBits_t kMqttConfigured = BIT1;
 constexpr EventBits_t kMqttConnected = BIT2;
+constexpr gpio_num_t kUserButton = GPIO_NUM_0;
+constexpr int kResetHoldSeconds = 5;
 
 struct MqttConfig {
   char client_id[64];
@@ -44,6 +49,32 @@ MqttConfig mqtt_config{};
 char provisioning_name[32]{};
 char provisioning_pop[16]{};
 char device_serial[24]{};
+char device_status[96] = "STARTING";
+bool provisioning_active = false;
+
+void show_device_status(const char *title, const char *status) {
+  strlcpy(device_status, status, sizeof(device_status));
+  display_show(title, device_status);
+}
+
+void show_current_state() {
+  if (provisioning_active) {
+    char instructions[96]{};
+    std::snprintf(instructions, sizeof(instructions), "PAIR %s POP %s",
+                  provisioning_name, provisioning_pop);
+    display_show("PROVISION DEVICE", instructions);
+    return;
+  }
+  const EventBits_t bits = state_events ? xEventGroupGetBits(state_events) : 0;
+  if (bits & kMqttConnected) {
+    display_show("MQTT CONNECTED", device_serial);
+  } else if (bits & kWifiConnected) {
+    display_show("WI-FI CONNECTED",
+                 bits & kMqttConfigured ? "CONNECTING MQTT" : "MQTT SETUP REQUIRED");
+  } else {
+    display_show("DEVICE STATUS", device_status);
+  }
+}
 
 bool valid_serial(const char *value) {
   if (!value) return false;
@@ -127,6 +158,7 @@ esp_err_t mqtt_config_handler(uint32_t, const uint8_t *input, ssize_t input_leng
     mqtt_config = candidate;
     xEventGroupSetBits(state_events, kMqttConfigured);
     ESP_LOGI(kTag, "MQTT credential stored for serial %s", mqtt_config.username);
+    display_show("MQTT CONFIG", "CREDENTIAL STORED");
   } else {
     ESP_LOGW(kTag, "Rejected MQTT provisioning data: %s", esp_err_to_name(result));
   }
@@ -199,6 +231,7 @@ void mqtt_event_handler(void *, esp_event_base_t, int32_t event_id, void *event_
   auto *event = static_cast<esp_mqtt_event_handle_t>(event_data);
   if (event_id == MQTT_EVENT_CONNECTED) {
     xEventGroupSetBits(state_events, kMqttConnected);
+    display_show("MQTT CONNECTED", device_serial);
     char telemetry_topic[384]{};
     char command_topic[384]{};
     std::snprintf(telemetry_topic, sizeof(telemetry_topic),
@@ -214,6 +247,7 @@ void mqtt_event_handler(void *, esp_event_base_t, int32_t event_id, void *event_
              command_topic, subscription_id, publish_id);
   } else if (event_id == MQTT_EVENT_DISCONNECTED) {
     xEventGroupClearBits(state_events, kMqttConnected);
+    show_device_status("MQTT STATUS", "DISCONNECTED - RETRYING");
     ESP_LOGW(kTag, "MQTT disconnected");
   } else if (event_id == MQTT_EVENT_DATA && event) {
     const int topic_length = event->topic_len < 300 ? event->topic_len : 300;
@@ -225,21 +259,95 @@ void mqtt_event_handler(void *, esp_event_base_t, int32_t event_id, void *event_
 
 void event_handler(void *, esp_event_base_t event_base, int32_t event_id, void *event_data) {
   if (event_base == NETWORK_PROV_EVENT) {
-    if (event_id == NETWORK_PROV_WIFI_CRED_FAIL) network_prov_mgr_reset_wifi_sm_state_on_failure();
-    if (event_id == NETWORK_PROV_END) network_prov_mgr_deinit();
+    if (event_id == NETWORK_PROV_START) {
+      ESP_LOGI(kTag, "BLE provisioning started as %s", provisioning_name);
+    } else if (event_id == NETWORK_PROV_WIFI_CRED_RECV) {
+      show_device_status("PROVISION DEVICE", "CREDENTIALS RECEIVED - CONNECTING");
+    } else if (event_id == NETWORK_PROV_WIFI_CRED_FAIL) {
+      show_device_status("PROVISION FAILED", "CHECK WI-FI CREDENTIALS - RETRY");
+      network_prov_mgr_reset_wifi_sm_state_on_failure();
+    } else if (event_id == NETWORK_PROV_WIFI_CRED_SUCCESS) {
+      show_device_status("PROVISION DEVICE", "WI-FI CONNECTED");
+    } else if (event_id == NETWORK_PROV_END) {
+      provisioning_active = false;
+      network_prov_mgr_deinit();
+    }
     return;
   }
   if (event_base == WIFI_EVENT) {
-    if (event_id == WIFI_EVENT_STA_START) esp_wifi_connect();
+    if (event_id == WIFI_EVENT_STA_START && !provisioning_active) {
+      show_device_status("WI-FI STATUS", "CONNECTING WITH SAVED SETTINGS");
+      esp_wifi_connect();
+    }
     if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
       xEventGroupClearBits(state_events, kWifiConnected);
-      esp_wifi_connect();
+      if (!provisioning_active) {
+        show_device_status("WI-FI STATUS", "DISCONNECTED - RETRYING");
+        esp_wifi_connect();
+      }
     }
     return;
   }
   if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     xEventGroupSetBits(state_events, kWifiConnected);
+    show_device_status("WI-FI CONNECTED",
+                       xEventGroupGetBits(state_events) & kMqttConfigured
+                           ? "CONNECTING MQTT"
+                           : "MQTT SETUP REQUIRED");
     start_mqtt();
+  }
+}
+
+void reset_button_task(void *) {
+  gpio_config_t config{};
+  config.pin_bit_mask = 1ULL << kUserButton;
+  config.mode = GPIO_MODE_INPUT;
+  config.pull_up_en = GPIO_PULLUP_ENABLE;
+  config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  config.intr_type = GPIO_INTR_DISABLE;
+  ESP_ERROR_CHECK(gpio_config(&config));
+
+  bool pressed = false;
+  TickType_t pressed_at = 0;
+  int last_remaining = -1;
+  while (true) {
+    const bool is_pressed = gpio_get_level(kUserButton) == 0;
+    if (is_pressed && !pressed) {
+      pressed = true;
+      pressed_at = xTaskGetTickCount();
+      last_remaining = kResetHoldSeconds;
+      display_show("RESET DEVICE", "KEEP HOLDING 5 SECONDS");
+      ESP_LOGI(kTag, "User button pressed; hold for 5 seconds to reset provisioning");
+    } else if (is_pressed && pressed) {
+      const int held_seconds = static_cast<int>(
+          pdTICKS_TO_MS(xTaskGetTickCount() - pressed_at) / 1000);
+      const int remaining = kResetHoldSeconds - held_seconds;
+      if (remaining > 0 && remaining != last_remaining) {
+        last_remaining = remaining;
+        char message[40]{};
+        std::snprintf(message, sizeof(message), "KEEP HOLDING %d SECONDS", remaining);
+        display_show("RESET DEVICE", message);
+      }
+      if (held_seconds >= kResetHoldSeconds) {
+        ESP_LOGW(kTag, "Erasing Wi-Fi and MQTT provisioning data from NVS");
+        display_show("RESET DEVICE", "DATA CLEARED - RESTARTING");
+        const esp_err_t result = nvs_flash_erase();
+        if (result != ESP_OK) {
+          ESP_LOGE(kTag, "Could not erase NVS: %s", esp_err_to_name(result));
+          display_show("RESET FAILED", esp_err_to_name(result));
+          pressed = false;
+        } else {
+          vTaskDelay(pdMS_TO_TICKS(750));
+          esp_restart();
+        }
+      }
+    } else if (!is_pressed && pressed) {
+      pressed = false;
+      last_remaining = -1;
+      ESP_LOGI(kTag, "Provisioning reset cancelled");
+      show_current_state();
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -254,6 +362,8 @@ void initialize_nvs() {
 }  // namespace
 
 extern "C" void app_main() {
+  ESP_ERROR_CHECK(display_init());
+  display_show("IOT PROVISIONING", "STARTING");
   initialize_nvs();
   ESP_ERROR_CHECK(esp_netif_init());
   ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -285,14 +395,24 @@ extern "C" void app_main() {
   bool wifi_provisioned = false;
   ESP_ERROR_CHECK(network_prov_mgr_is_wifi_provisioned(&wifi_provisioned));
   if (wifi_provisioned) {
+    show_device_status("WI-FI STATUS", "CONNECTING WITH SAVED SETTINGS");
     network_prov_mgr_deinit();
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
   } else {
+    provisioning_active = true;
+    char instructions[96]{};
+    std::snprintf(instructions, sizeof(instructions), "PAIR %s POP %s",
+                  provisioning_name, provisioning_pop);
+    display_show("PROVISION DEVICE", instructions);
     ESP_LOGI(kTag, "BLE provisioning service %s, PoP %s", provisioning_name, provisioning_pop);
     ESP_ERROR_CHECK(network_prov_mgr_endpoint_create(kMqttEndpoint));
     ESP_ERROR_CHECK(network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_1, provisioning_pop, provisioning_name, nullptr));
     ESP_ERROR_CHECK(network_prov_mgr_endpoint_register(kMqttEndpoint, mqtt_config_handler, nullptr));
     ESP_LOGI(kTag, "Send MQTT JSON to custom endpoint '%s' before applying Wi-Fi credentials", kMqttEndpoint);
   }
+
+  const BaseType_t reset_task_created = xTaskCreate(
+      reset_button_task, "reset-button", 3072, nullptr, 6, nullptr);
+  ESP_ERROR_CHECK(reset_task_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 }
