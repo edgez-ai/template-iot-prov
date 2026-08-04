@@ -25,7 +25,20 @@ certificate bundle; certificate verification is not disabled. The handler
 validates the Appwrite serial syntax, stores the credential in NVS, and
 publishes an online event to
 `projects/<projectId>/devices/<serial>/telemetry/<channel>` after Wi-Fi and MQTT
-connect. It also subscribes at QoS 1 to
+connect. Every 30 seconds it also reads the ESP32-S3 internal chip temperature
+and publishes a QoS 1 JSON message to
+`projects/<projectId>/devices/<serial>/telemetry/temp`:
+
+```json
+{
+  "temperatureC": 42.31,
+  "unit": "celsius",
+  "sensor": "internal"
+}
+```
+
+The internal sensor measures chip temperature, not ambient room temperature.
+The firmware also subscribes at QoS 1 to
 `projects/<projectId>/devices/<serial>/commands/#`, matching Appwrite's EMQX
 ACL. The Appwrite device must be created with `enabled: true`.
 

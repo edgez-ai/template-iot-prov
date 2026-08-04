@@ -31,6 +31,8 @@ Open `iot-provisioning.code-workspace` in VS Code to work on all five folders.
    `projects/<projectId>/devices/<serial>/telemetry/<channel>`. Appwrite's EMQX
    ACL allows that serial to publish only beneath its own telemetry/events
    topics and subscribe only beneath its own commands topic.
+   Firmware publishes its internal chip temperature every 30 seconds on the
+   `temp` channel as `{ "temperatureC": ..., "unit": "celsius", "sensor": "internal" }`.
 6. Appwrite resolves the MQTT client and emits
    `devices.<deviceId>.mqtt.message.publish` to the Function.
 7. The Function verifies the topic project and serial against the built-in

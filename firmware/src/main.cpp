@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "cJSON.h"
+#include "driver/temperature_sensor.h"
 #include "esp_crt_bundle.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -12,6 +13,7 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "freertos/task.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "network_provisioning/manager.h"
@@ -22,8 +24,10 @@ constexpr char kTag[] = "iot_prov";
 constexpr char kMqttNamespace[] = "mqtt";
 constexpr char kMqttEndpoint[] = "mqtt-config";
 constexpr char kMqttBrokerUri[] = "mqtts://mqtt.edgez.ai:8883";
+constexpr TickType_t kTemperaturePublishInterval = pdMS_TO_TICKS(30000);
 constexpr EventBits_t kWifiConnected = BIT0;
 constexpr EventBits_t kMqttConfigured = BIT1;
+constexpr EventBits_t kMqttConnected = BIT2;
 
 struct MqttConfig {
   char client_id[64];
@@ -35,6 +39,7 @@ struct MqttConfig {
 
 EventGroupHandle_t state_events;
 esp_mqtt_client_handle_t mqtt_client;
+temperature_sensor_handle_t temperature_sensor;
 MqttConfig mqtt_config{};
 char provisioning_name[32]{};
 char provisioning_pop[16]{};
@@ -147,6 +152,32 @@ void make_device_identity() {
 
 void mqtt_event_handler(void *, esp_event_base_t, int32_t, void *);
 
+void temperature_telemetry_task(void *) {
+  while (true) {
+    xEventGroupWaitBits(state_events, kMqttConnected, pdFALSE, pdTRUE, portMAX_DELAY);
+
+    float temperature_celsius = 0;
+    const esp_err_t result = temperature_sensor_get_celsius(temperature_sensor, &temperature_celsius);
+    if (result == ESP_OK && (xEventGroupGetBits(state_events) & kMqttConnected)) {
+      char topic[384]{};
+      char payload[128]{};
+      std::snprintf(topic, sizeof(topic),
+                    "projects/%s/devices/%s/telemetry/temp",
+                    mqtt_config.project_id, mqtt_config.username);
+      std::snprintf(payload, sizeof(payload),
+                    "{\"temperatureC\":%.2f,\"unit\":\"celsius\",\"sensor\":\"internal\"}",
+                    static_cast<double>(temperature_celsius));
+      const int message_id = esp_mqtt_client_publish(mqtt_client, topic, payload, 0, 1, 0);
+      ESP_LOGI(kTag, "Temperature %.2f C published to %s (%d)",
+               static_cast<double>(temperature_celsius), topic, message_id);
+    } else if (result != ESP_OK) {
+      ESP_LOGW(kTag, "Temperature read failed: %s", esp_err_to_name(result));
+    }
+
+    vTaskDelay(kTemperaturePublishInterval);
+  }
+}
+
 void start_mqtt() {
   if (mqtt_client || !(xEventGroupGetBits(state_events) & kMqttConfigured)) return;
   esp_mqtt_client_config_t config{};
@@ -167,6 +198,7 @@ void start_mqtt() {
 void mqtt_event_handler(void *, esp_event_base_t, int32_t event_id, void *event_data) {
   auto *event = static_cast<esp_mqtt_event_handle_t>(event_data);
   if (event_id == MQTT_EVENT_CONNECTED) {
+    xEventGroupSetBits(state_events, kMqttConnected);
     char telemetry_topic[384]{};
     char command_topic[384]{};
     std::snprintf(telemetry_topic, sizeof(telemetry_topic),
@@ -180,6 +212,9 @@ void mqtt_event_handler(void *, esp_event_base_t, int32_t event_id, void *event_
         mqtt_client, telemetry_topic, "{\"status\":\"online\"}", 0, 1, 0);
     ESP_LOGI(kTag, "MQTT connected; subscribed %s (%d), published telemetry (%d)",
              command_topic, subscription_id, publish_id);
+  } else if (event_id == MQTT_EVENT_DISCONNECTED) {
+    xEventGroupClearBits(state_events, kMqttConnected);
+    ESP_LOGW(kTag, "MQTT disconnected");
   } else if (event_id == MQTT_EVENT_DATA && event) {
     const int topic_length = event->topic_len < 300 ? event->topic_len : 300;
     const int data_length = event->data_len < 512 ? event->data_len : 512;
@@ -227,6 +262,13 @@ extern "C" void app_main() {
   state_events = xEventGroupCreate();
   ESP_ERROR_CHECK(state_events ? ESP_OK : ESP_ERR_NO_MEM);
   if (load_mqtt_config()) xEventGroupSetBits(state_events, kMqttConfigured);
+
+  temperature_sensor_config_t temperature_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
+  ESP_ERROR_CHECK(temperature_sensor_install(&temperature_config, &temperature_sensor));
+  ESP_ERROR_CHECK(temperature_sensor_enable(temperature_sensor));
+  const BaseType_t task_created = xTaskCreate(
+      temperature_telemetry_task, "temperature_telemetry", 4096, nullptr, 5, nullptr);
+  ESP_ERROR_CHECK(task_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 
   ESP_ERROR_CHECK(esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, event_handler, nullptr));
   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, event_handler, nullptr));
