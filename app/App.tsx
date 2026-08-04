@@ -32,8 +32,15 @@ async function requestBlePermissions() {
   const permissions = Number(Platform.Version) >= 31
     ? [PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN, PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT]
     : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
-  const results = await PermissionsAndroid.requestMultiple(permissions);
-  if (permissions.some((permission) => results[permission] !== PermissionsAndroid.RESULTS.GRANTED)) {
+  const checks = await Promise.all(permissions.map(async (permission) => ({
+    permission,
+    granted: await PermissionsAndroid.check(permission),
+  })));
+  const missing = checks.filter(({ granted }) => !granted).map(({ permission }) => permission);
+  if (!missing.length) return;
+
+  const results = await PermissionsAndroid.requestMultiple(missing);
+  if (missing.some((permission) => results[permission] !== PermissionsAndroid.RESULTS.GRANTED)) {
     throw new Error("Bluetooth permission is required to discover and provision devices.");
   }
 }
