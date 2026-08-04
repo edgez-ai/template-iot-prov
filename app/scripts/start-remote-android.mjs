@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import net from "node:net";
 
 const port = Number(process.env.EXPO_PORT ?? 8081);
@@ -37,12 +37,6 @@ while (!(await isMetroReady())) {
     process.exit(1);
   }
   await new Promise((resolve) => setTimeout(resolve, 250));
-}
-
-const reverse = spawnSync("adb", ["-s", serial, "reverse", `tcp:${port}`, `tcp:${port}`], { stdio: "inherit" });
-if (reverse.status !== 0) {
-  stop();
-  process.exit(reverse.status ?? 1);
 }
 
 const adb = spawn(
