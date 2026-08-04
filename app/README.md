@@ -10,9 +10,10 @@ reuses the Appwrite Device, sends its one-time MQTT credential to `mqtt-config`,
 and provisions Wi-Fi. It also uses Appwrite Auth and reads permitted telemetry
 directly from TablesDB.
 
-The provisioning button opens a three-step dialog for selecting the BLE device,
-confirming its labeled name and PoP fields, and selecting the scanned Wi-Fi
-network. The Wi-Fi password field is shown only for secured networks.
+The `+ ADD` button in the dashboard header opens a full-screen, three-step flow
+for selecting the BLE device, confirming its labeled name and PoP fields, and
+selecting the scanned Wi-Fi network. The Wi-Fi password field is shown only for
+secured networks.
 Its Expo deep-link scheme is `edgez-devtools`, so application links begin with
 `edgez-devtools://`.
 

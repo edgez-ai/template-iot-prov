@@ -260,7 +260,7 @@ export default function App() {
   if (busy && !user) return <SafeAreaProvider><SafeAreaView style={styles.safe}><ActivityIndicator style={styles.loader} color="#62d8cf" size="large" /></SafeAreaView></SafeAreaProvider>;
 
   return <SafeAreaProvider><SafeAreaView style={styles.safe}><StatusBar style="light" /><KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-    <View style={styles.header}><View><Text style={styles.eyebrow}>APPWRITE DEVICES · MQTT</Text><Text style={styles.title}>{user ? "Device telemetry" : "Operator access"}</Text></View>{user && <Pressable onPress={signOut}><Text style={styles.signOut}>SIGN OUT</Text></Pressable>}</View>
+    <View style={styles.header}><View><Text style={styles.eyebrow}>APPWRITE DEVICES · MQTT</Text><Text style={styles.title}>{user ? "Device telemetry" : "Operator access"}</Text></View>{user && <View style={styles.headerActions}><Pressable style={styles.addButton} onPress={openProvisioningDialog} disabled={busy}><Text style={styles.addButtonText}>+ ADD</Text></Pressable><Pressable onPress={signOut}><Text style={styles.signOut}>SIGN OUT</Text></Pressable></View>}</View>
     {!user ? <View style={styles.auth}>
       <Text style={styles.hero}>Devices in.{"\n"}<Text style={styles.accent}>Signals out.</Text></Text>
       <Text style={styles.authLabel}>EMAIL</Text>
@@ -270,17 +270,13 @@ export default function App() {
       <Pressable style={styles.primary} onPress={() => authenticate(false)} disabled={busy}><Text style={styles.primaryText}>SIGN IN</Text></Pressable>
       <Pressable style={styles.secondary} onPress={() => authenticate(true)} disabled={busy}><Text style={styles.secondaryText}>CREATE ACCOUNT</Text></Pressable>
     </View> : <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <View style={styles.card}><Text style={styles.cardTitle}>Provision device over BLE</Text>
-        <Text style={styles.muted}>Add an ESP32 using the guided Bluetooth and Wi-Fi setup.</Text>
-        <Pressable style={styles.primary} onPress={openProvisioningDialog} disabled={busy}><Text style={styles.primaryText}>PROVISION DEVICE</Text></Pressable>
-      </View>
       <Text style={styles.sectionLabel}>{devices.length} DEVICES · {telemetry.length} RECENT MESSAGES</Text>
       {telemetry.map((row) => <View style={styles.telemetry} key={row.$id}><View style={styles.telemetryHeader}><Text style={styles.deviceName}>{deviceNames.get(row.deviceId) || row.serial}</Text><Text style={styles.time}>{new Date(row.receivedAt).toLocaleTimeString()}</Text></View><Text style={styles.topic}>{row.topic}</Text><Text style={styles.payload}>{JSON.stringify(JSON.parse(row.payload), null, 2)}</Text></View>)}
       {!telemetry.length && <Text style={styles.empty}>No MQTT telemetry yet.</Text>}
     </ScrollView>}
-    <Modal visible={provisioningDialogOpen} transparent animationType="slide" onRequestClose={closeProvisioningDialog}>
-      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.dialog} accessibilityViewIsModal>
+    <Modal visible={provisioningDialogOpen} animationType="slide" onRequestClose={closeProvisioningDialog}>
+      <SafeAreaView style={styles.dialogPage}>
+        <KeyboardAvoidingView style={styles.dialogScreen} behavior={Platform.OS === "ios" ? "padding" : undefined} accessibilityViewIsModal>
           <View style={styles.dialogHeader}><View><Text style={styles.stepLabel}>STEP {provisioningStep} OF 3</Text><Text style={styles.dialogTitle}>{provisioningStep === 1 ? "Choose device" : provisioningStep === 2 ? "Device details" : "Connect Wi-Fi"}</Text></View><Pressable onPress={closeProvisioningDialog} disabled={busy}><Text style={styles.close}>CLOSE</Text></Pressable></View>
           <ScrollView contentContainerStyle={styles.dialogContent} keyboardShouldPersistTaps="handled">
             {provisioningStep === 1 && <>
@@ -307,8 +303,8 @@ export default function App() {
             {provisioningStatus ? <Text style={styles.dialogStatus}>{provisioningStatus}</Text> : null}
             {error ? <Text style={styles.dialogError}>{error}</Text> : null}
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
     {error ? <Text style={styles.error}>{error}</Text> : null}
   </KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
@@ -316,13 +312,13 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#092e35" }, loader: { flex: 1 }, screen: { flex: 1, paddingHorizontal: 22, paddingTop: 18 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingBottom: 20 }, eyebrow: { color: "#69cfc7", fontSize: 10, fontWeight: "900", letterSpacing: 1.4 }, title: { color: "#fff", fontSize: 28, fontWeight: "800", marginTop: 3 }, signOut: { color: "#90aaa7", fontSize: 10, fontWeight: "800" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingBottom: 20 }, headerActions: { flexDirection: "row", alignItems: "center", gap: 14 }, addButton: { minHeight: 36, paddingHorizontal: 13, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#0a8c87" }, addButtonText: { color: "white", fontSize: 10, fontWeight: "900", letterSpacing: .7 }, eyebrow: { color: "#69cfc7", fontSize: 10, fontWeight: "900", letterSpacing: 1.4 }, title: { color: "#fff", fontSize: 28, fontWeight: "800", marginTop: 3 }, signOut: { color: "#90aaa7", fontSize: 10, fontWeight: "800" },
   auth: { flex: 1, justifyContent: "center", gap: 8, paddingBottom: 40 }, hero: { color: "white", fontSize: 45, lineHeight: 51, fontWeight: "900", letterSpacing: -1.8, marginBottom: 24 }, accent: { color: "#ff8264" }, authLabel: { color: "#90aaa7", fontSize: 9, fontWeight: "900", letterSpacing: 1, marginTop: 5 },
   input: { height: 58, borderWidth: 1, borderColor: "#36565b", borderRadius: 14, paddingHorizontal: 17, color: "white", fontSize: 16 }, primary: { minHeight: 54, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#0a8c87", marginTop: 5 }, primaryText: { color: "white", fontSize: 10, fontWeight: "900", letterSpacing: .8 }, secondary: { minHeight: 52, alignItems: "center", justifyContent: "center" }, secondaryText: { color: "#69cfc7", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
-  content: { paddingBottom: 30, gap: 12 }, card: { padding: 20, borderRadius: 20, backgroundColor: "#f7faf9", gap: 10 }, cardTitle: { color: "#0a3037", fontSize: 19, fontWeight: "800", marginBottom: 4 }, inputLight: { height: 54, borderWidth: 1, borderColor: "#cedbdc", borderRadius: 12, paddingHorizontal: 15, color: "#0a3037", backgroundColor: "white" }, muted: { color: "#59716f", fontSize: 11 },
-  bleDevice: { padding: 13, borderRadius: 12, borderWidth: 1, borderColor: "#cedbdc", backgroundColor: "white" }, bleDeviceSelected: { borderColor: "#0a8c87", borderWidth: 2 }, deviceNameDark: { color: "#0a3037", fontSize: 14, fontWeight: "800" },
-  wifiHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }, wifiTitle: { color: "#59716f", fontSize: 9, fontWeight: "900", letterSpacing: .8 }, rescan: { color: "#0a8c87", fontSize: 10, fontWeight: "900" }, wifiNetwork: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#cedbdc", backgroundColor: "white", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, wifiNetworkSelected: { borderColor: "#0a8c87", borderWidth: 2, backgroundColor: "#e9f7f5" }, signal: { color: "#59716f", fontSize: 10, fontWeight: "700" },
-  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(3, 24, 29, .72)" }, dialog: { maxHeight: "90%", borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: "#f7faf9", paddingTop: 20 }, dialogHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#dce6e5" }, stepLabel: { color: "#0a8c87", fontSize: 9, fontWeight: "900", letterSpacing: 1 }, dialogTitle: { color: "#0a3037", fontSize: 24, fontWeight: "900", marginTop: 3 }, close: { color: "#59716f", fontSize: 10, fontWeight: "900" }, dialogContent: { padding: 22, paddingBottom: 34, gap: 10 }, dialogHelp: { color: "#59716f", fontSize: 13, lineHeight: 19 }, selectedSummary: { padding: 13, borderRadius: 12, backgroundColor: "#e9f7f5", marginBottom: 4 }, fieldLabel: { color: "#385753", fontSize: 9, fontWeight: "900", letterSpacing: .9, marginTop: 5 }, fieldHint: { color: "#718783", fontSize: 10, marginTop: -5 }, backButton: { minHeight: 44, alignItems: "center", justifyContent: "center" }, dialogStatus: { color: "#59716f", fontSize: 11, textAlign: "center", marginTop: 2 }, dialogError: { color: "#b9472f", fontSize: 11, textAlign: "center" },
+  content: { paddingBottom: 30, gap: 12 }, inputLight: { height: 54, borderWidth: 1, borderColor: "#cedbdc", borderRadius: 12, paddingHorizontal: 15, color: "#0a3037", backgroundColor: "white" }, muted: { color: "#59716f", fontSize: 11 },
+  bleDevice: { padding: 13, borderRadius: 12, borderWidth: 1, borderColor: "#cedbdc", backgroundColor: "white" }, deviceNameDark: { color: "#0a3037", fontSize: 14, fontWeight: "800" },
+  wifiHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }, rescan: { color: "#0a8c87", fontSize: 10, fontWeight: "900" }, wifiNetwork: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#cedbdc", backgroundColor: "white", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, wifiNetworkSelected: { borderColor: "#0a8c87", borderWidth: 2, backgroundColor: "#e9f7f5" }, signal: { color: "#59716f", fontSize: 10, fontWeight: "700" },
+  dialogPage: { flex: 1, backgroundColor: "#f7faf9" }, dialogScreen: { flex: 1 }, dialogHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: "#dce6e5" }, stepLabel: { color: "#0a8c87", fontSize: 9, fontWeight: "900", letterSpacing: 1 }, dialogTitle: { color: "#0a3037", fontSize: 24, fontWeight: "900", marginTop: 3 }, close: { color: "#59716f", fontSize: 10, fontWeight: "900" }, dialogContent: { padding: 22, paddingBottom: 34, gap: 10 }, dialogHelp: { color: "#59716f", fontSize: 13, lineHeight: 19 }, selectedSummary: { padding: 13, borderRadius: 12, backgroundColor: "#e9f7f5", marginBottom: 4 }, fieldLabel: { color: "#385753", fontSize: 9, fontWeight: "900", letterSpacing: .9, marginTop: 5 }, fieldHint: { color: "#718783", fontSize: 10, marginTop: -5 }, backButton: { minHeight: 44, alignItems: "center", justifyContent: "center" }, dialogStatus: { color: "#59716f", fontSize: 11, textAlign: "center", marginTop: 2 }, dialogError: { color: "#b9472f", fontSize: 11, textAlign: "center" },
   sectionLabel: { color: "#7d9a97", fontSize: 10, fontWeight: "900", letterSpacing: 1.2, marginTop: 14 }, telemetry: { padding: 17, borderRadius: 15, backgroundColor: "#134048" }, telemetryHeader: { flexDirection: "row", justifyContent: "space-between" }, deviceName: { color: "white", fontSize: 16, fontWeight: "700" }, time: { color: "#8eaaa7", fontSize: 10 }, topic: { color: "#69cfc7", fontSize: 10, marginTop: 5 }, payload: { color: "#d9efed", fontSize: 11, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", marginTop: 10 },
   empty: { color: "#829d9a", textAlign: "center", padding: 28 }, error: { color: "#ffc0af", textAlign: "center", fontSize: 12, paddingVertical: 12 },
 });
