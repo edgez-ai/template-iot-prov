@@ -1,14 +1,19 @@
 const appName = process.env.APP_NAME;
 const projectName = process.env.APPWRITE_PROJECT_NAME;
 const domainSuffix = process.env.DOMAIN_SUFFIX;
-const endpoint = process.env.APPWRITE_ENDPOINT;
+const configuredEndpoint = process.env.APPWRITE_PUBLIC_ENDPOINT || process.env.APPWRITE_ENDPOINT;
 const projectId = process.env.APPWRITE_PROJECT_ID;
 const databaseId = process.env.DATABASE_ID;
 const telemetryTableId = process.env.TELEMETRY_TABLE_ID;
 
-if (!appName || !projectName || !domainSuffix || !endpoint || !projectId || !databaseId || !telemetryTableId) {
+if (!appName || !projectName || !domainSuffix || !configuredEndpoint || !projectId || !databaseId || !telemetryTableId) {
   throw new Error("Appwrite project and telemetry table environment is incomplete");
 }
+
+const endpointUrl = new URL(configuredEndpoint);
+const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+if (endpointUrl.protocol === "http:" && !localHosts.has(endpointUrl.hostname)) endpointUrl.protocol = "https:";
+const endpoint = endpointUrl.toString().replace(/\/$/, "");
 
 const bundlePrefix = domainSuffix.split(".").reverse().join(".");
 const androidName = appName.replace(/[^A-Za-z0-9_]/g, "_").replace(/^[^A-Za-z_]+/, "app");

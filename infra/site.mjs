@@ -13,7 +13,7 @@ export function installSite() {
     ["IOT_PROV_APP_NAME", config.name],
     ["IOT_PROV_PROJECT_NAME", config.projectName],
     ["IOT_PROV_DOMAIN_SUFFIX", config.domainSuffix],
-    ["IOT_PROV_ENDPOINT", config.endpoint],
+    ["IOT_PROV_ENDPOINT", config.publicEndpoint],
     ["IOT_PROV_PROJECT_ID", config.projectId],
     ["IOT_PROV_DATABASE_ID", config.databaseId],
     ["IOT_PROV_TELEMETRY_TABLE_ID", config.telemetryTableId],

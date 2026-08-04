@@ -47,6 +47,7 @@ The managed workspace injects:
 APP_NAME=<workspace-name>
 DOMAIN_SUFFIX=edgez.biz
 APPWRITE_ENDPOINT=<appwrite-endpoint>
+APPWRITE_PUBLIC_ENDPOINT=<optional-browser-safe-appwrite-endpoint>
 APPWRITE_PROJECT_ID=<project-id>
 APPWRITE_PROJECT_NAME=<dns-safe-project-name>
 APPWRITE_API_KEY=<server-api-key>
@@ -60,6 +61,10 @@ set -a
 . ./.env.local
 set +a
 ```
+
+`APPWRITE_ENDPOINT` configures the server-side CLI. Browser and mobile builds
+use `APPWRITE_PUBLIC_ENDPOINT` when provided; otherwise a non-local HTTP
+endpoint is automatically upgraded to HTTPS to prevent mixed-content errors.
 
 All clients derive the Function URL as
 `https://${APPWRITE_PROJECT_NAME}-${APP_NAME}.functions.${DOMAIN_SUFFIX}`.

@@ -26,10 +26,18 @@ if (missing.length) {
   process.exit(1);
 }
 
+function publicClientEndpoint(value) {
+  const endpoint = new URL(value);
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (endpoint.protocol === "http:" && !localHosts.has(endpoint.hostname)) endpoint.protocol = "https:";
+  return endpoint.toString().replace(/\/$/, "");
+}
+
 export const config = {
   name: process.env.APP_NAME,
   domainSuffix: process.env.DOMAIN_SUFFIX,
   endpoint: process.env.APPWRITE_ENDPOINT,
+  publicEndpoint: publicClientEndpoint(process.env.APPWRITE_PUBLIC_ENDPOINT || process.env.APPWRITE_ENDPOINT),
   projectId: process.env.APPWRITE_PROJECT_ID,
   projectName: process.env.APPWRITE_PROJECT_NAME,
   apiKey: process.env.APPWRITE_API_KEY,
