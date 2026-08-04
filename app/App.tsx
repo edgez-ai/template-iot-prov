@@ -30,7 +30,11 @@ function serialFromBleName(name: string) {
 async function requestBlePermissions() {
   if (Platform.OS !== "android") return;
   const permissions = Number(Platform.Version) >= 31
-    ? [PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN, PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT]
+    ? [
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      ]
     : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
   const checks = await Promise.all(permissions.map(async (permission) => ({
     permission,
