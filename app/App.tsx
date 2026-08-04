@@ -5,6 +5,7 @@ import { ActivityIndicator, KeyboardAvoidingView, PermissionsAndroid, Platform, 
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Account, Client, ID, Models, Query, TablesDB } from "react-native-appwrite";
 import { ESPDevice, ESPProvisionManager, ESPSecurity, ESPTransport } from "@orbital-systems/react-native-esp-idf-provisioning";
+import type { ESPWifiList } from "@orbital-systems/react-native-esp-idf-provisioning";
 
 type Device = { $id: string; serial: string; name: string; status: string; enabled: boolean };
 type Credential = { clientId: string; username: string; password: string };
@@ -69,6 +70,9 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [bleDevices, setBleDevices] = useState<ESPDevice[]>([]);
   const [selectedBleDevice, setSelectedBleDevice] = useState<ESPDevice | null>(null);
+  const [proofOfPossession, setProofOfPossession] = useState("");
+  const [bleConnected, setBleConnected] = useState(false);
+  const [wifiNetworks, setWifiNetworks] = useState<ESPWifiList[]>([]);
   const [name, setName] = useState("");
   const [ssid, setSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
@@ -110,6 +114,8 @@ export default function App() {
   async function scanBleDevices() {
     setBusy(true); setError(""); setProvisioningStatus("Scanning for PROV_ devices…");
     try {
+      selectedBleDevice?.disconnect();
+      setSelectedBleDevice(null); setProofOfPossession(""); setBleConnected(false); setWifiNetworks([]); setSsid(""); setWifiPassword("");
       await requestBlePermissions();
       const found = await ESPProvisionManager.searchESPDevices("PROV_", ESPTransport.ble, ESPSecurity.secure);
       const valid = found.filter((device) => /^PROV_[A-F0-9]{12}$/i.test(device.name));
@@ -119,13 +125,62 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function scanWifiNetworks(device: ESPDevice) {
+    setProvisioningStatus("Asking the ESP32 to scan nearby Wi-Fi networks…");
+    const found = await device.scanWifiList();
+    const strongestBySsid = new Map<string, ESPWifiList>();
+    for (const network of found) {
+      const networkSsid = network.ssid.trim();
+      if (!networkSsid) continue;
+      const current = strongestBySsid.get(networkSsid);
+      if (!current || network.rssi > current.rssi) {
+        strongestBySsid.set(networkSsid, { ...network, ssid: networkSsid });
+      }
+    }
+    const networks = [...strongestBySsid.values()].sort((left, right) => right.rssi - left.rssi);
+    setWifiNetworks(networks);
+    setProvisioningStatus(networks.length ? "Select the Wi-Fi network for this device." : "The ESP32 found no Wi-Fi networks.");
+  }
+
+  function selectBleDevice(device: ESPDevice) {
+    selectedBleDevice?.disconnect();
+    setError(""); setWifiNetworks([]); setSsid(""); setWifiPassword("");
+    setSelectedBleDevice(device);
+    setProofOfPossession("");
+    setBleConnected(false);
+    setProvisioningStatus(`Enter the PoP shown on ${device.name}'s OLED.`);
+  }
+
+  async function connectAndScanWifi() {
+    if (!selectedBleDevice || !proofOfPossession.trim()) return;
+    setBusy(true); setError(""); setWifiNetworks([]); setSsid(""); setWifiPassword("");
+    try {
+      setProvisioningStatus(`Authenticating ${selectedBleDevice.name} with the provided PoP…`);
+      await selectedBleDevice.connect(proofOfPossession.trim());
+      setBleConnected(true);
+      await scanWifiNetworks(selectedBleDevice);
+    } catch (caught) {
+      selectedBleDevice.disconnect();
+      setBleConnected(false);
+      setWifiNetworks([]);
+      setError(messageOf(caught));
+      setProvisioningStatus("PoP authentication failed. Check the value shown on the OLED and try again.");
+    } finally { setBusy(false); }
+  }
+
+  async function rescanWifiNetworks() {
+    if (!selectedBleDevice || !bleConnected) return;
+    setBusy(true); setError(""); setSsid(""); setWifiPassword("");
+    try { await scanWifiNetworks(selectedBleDevice); }
+    catch (caught) { setError(messageOf(caught)); setProvisioningStatus("Could not scan Wi-Fi networks."); }
+    finally { setBusy(false); }
+  }
+
   async function provisionDevice() {
-    if (!selectedBleDevice) return;
-    setBusy(true); setError(""); setProvisioningStatus("Connecting securely over BLE…");
+    if (!selectedBleDevice || !bleConnected) return;
+    setBusy(true); setError(""); setProvisioningStatus("Preparing the device credential…");
     try {
       const serial = serialFromBleName(selectedBleDevice.name);
-      const proofOfPossession = serial.slice(-8).toLowerCase();
-      await selectedBleDevice.connect(proofOfPossession);
 
       setProvisioningStatus("Creating Appwrite device credential…");
       let appwriteDevice = devices.find((device) => device.serial === serial);
@@ -155,15 +210,16 @@ export default function App() {
         throw new Error(`Wi-Fi provisioning failed: ${result.status}`);
       }
       setProvisioningStatus(`Provisioned ${serial}. Waiting for temperature telemetry.`);
-      setSelectedBleDevice(null); setBleDevices([]); setName(""); setSsid(""); setWifiPassword("");
+      setSelectedBleDevice(null); setBleDevices([]); setProofOfPossession(""); setBleConnected(false); setWifiNetworks([]); setName(""); setSsid(""); setWifiPassword("");
       await refresh();
     } catch (caught) { setError(messageOf(caught)); setProvisioningStatus("Provisioning did not complete."); }
-    finally { selectedBleDevice.disconnect(); setBusy(false); }
+    finally { selectedBleDevice.disconnect(); setBleConnected(false); setWifiNetworks([]); setBusy(false); }
   }
 
   async function signOut() {
+    selectedBleDevice?.disconnect();
     await account.deleteSession({ sessionId: "current" });
-    setUser(null); setDevices([]); setTelemetry([]); setBleDevices([]); setSelectedBleDevice(null);
+    setUser(null); setDevices([]); setTelemetry([]); setBleDevices([]); setSelectedBleDevice(null); setProofOfPossession(""); setBleConnected(false); setWifiNetworks([]);
   }
 
   const deviceNames = useMemo(() => new Map(devices.map((device) => [device.$id, device.name])), [devices]);
@@ -180,12 +236,18 @@ export default function App() {
     </View> : <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.card}><Text style={styles.cardTitle}>Provision device over BLE</Text>
         <Pressable style={styles.primary} onPress={scanBleDevices} disabled={busy}><Text style={styles.primaryText}>{busy ? "WORKING…" : "SCAN PROV_ DEVICES"}</Text></Pressable>
-        {bleDevices.map((device) => <Pressable key={device.name} style={[styles.bleDevice, selectedBleDevice?.name === device.name && styles.bleDeviceSelected]} onPress={() => setSelectedBleDevice(device)}><Text style={styles.deviceNameDark}>{device.name}</Text><Text style={styles.muted}>Serial {device.name.slice(5).toUpperCase()}</Text></Pressable>)}
+        {bleDevices.map((device) => <Pressable key={device.name} style={[styles.bleDevice, selectedBleDevice?.name === device.name && styles.bleDeviceSelected]} onPress={() => selectBleDevice(device)} disabled={busy}><Text style={styles.deviceNameDark}>{device.name}</Text><Text style={styles.muted}>Serial {device.name.slice(5).toUpperCase()}</Text></Pressable>)}
         {selectedBleDevice && <>
           <TextInput style={styles.inputLight} value={name} onChangeText={setName} placeholder="Display name" maxLength={128} />
-          <TextInput style={styles.inputLight} value={ssid} onChangeText={setSsid} placeholder="Wi-Fi SSID" autoCapitalize="none" />
-          <TextInput style={styles.inputLight} value={wifiPassword} onChangeText={setWifiPassword} placeholder="Wi-Fi password" secureTextEntry />
-          <Pressable style={styles.primary} onPress={provisionDevice} disabled={busy || !ssid.trim()}><Text style={styles.primaryText}>PROVISION DEVICE</Text></Pressable>
+          {!bleConnected ? <>
+            <TextInput style={styles.inputLight} value={proofOfPossession} onChangeText={setProofOfPossession} placeholder="PoP shown on the device OLED" autoCapitalize="none" autoCorrect={false} />
+            <Pressable style={styles.primary} onPress={connectAndScanWifi} disabled={busy || !proofOfPossession.trim()}><Text style={styles.primaryText}>CONNECT &amp; SCAN WI-FI</Text></Pressable>
+          </> : <>
+            <View style={styles.wifiHeader}><Text style={styles.wifiTitle}>WI-FI NETWORKS FOUND BY ESP32</Text><Pressable onPress={rescanWifiNetworks} disabled={busy}><Text style={styles.rescan}>RESCAN</Text></Pressable></View>
+            {wifiNetworks.map((network) => <Pressable key={`${network.ssid}-${network.bssid || network.channel || "ap"}`} style={[styles.wifiNetwork, ssid === network.ssid && styles.wifiNetworkSelected]} onPress={() => { setSsid(network.ssid); setWifiPassword(""); }} disabled={busy}><View><Text style={styles.deviceNameDark}>{network.ssid}</Text><Text style={styles.muted}>{network.auth === 0 ? "Open network" : "Password required"}{network.channel ? ` · Channel ${network.channel}` : ""}</Text></View><Text style={styles.signal}>{network.rssi} dBm</Text></Pressable>)}
+            {ssid && wifiNetworks.find((network) => network.ssid === ssid)?.auth !== 0 ? <TextInput style={styles.inputLight} value={wifiPassword} onChangeText={setWifiPassword} placeholder={`Password for ${ssid}`} secureTextEntry /> : null}
+            <Pressable style={styles.primary} onPress={provisionDevice} disabled={busy || !ssid || (wifiNetworks.find((network) => network.ssid === ssid)?.auth !== 0 && !wifiPassword)}><Text style={styles.primaryText}>PROVISION DEVICE</Text></Pressable>
+          </>}
         </>}
         {provisioningStatus ? <Text style={styles.muted}>{provisioningStatus}</Text> : null}
       </View>
@@ -204,6 +266,7 @@ const styles = StyleSheet.create({
   input: { height: 58, borderWidth: 1, borderColor: "#36565b", borderRadius: 14, paddingHorizontal: 17, color: "white", fontSize: 16 }, primary: { minHeight: 54, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#0a8c87", marginTop: 5 }, primaryText: { color: "white", fontSize: 10, fontWeight: "900", letterSpacing: .8 }, secondary: { minHeight: 52, alignItems: "center", justifyContent: "center" }, secondaryText: { color: "#69cfc7", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   content: { paddingBottom: 30, gap: 12 }, card: { padding: 20, borderRadius: 20, backgroundColor: "#f7faf9", gap: 10 }, cardTitle: { color: "#0a3037", fontSize: 19, fontWeight: "800", marginBottom: 4 }, inputLight: { height: 54, borderWidth: 1, borderColor: "#cedbdc", borderRadius: 12, paddingHorizontal: 15, color: "#0a3037", backgroundColor: "white" }, muted: { color: "#59716f", fontSize: 11 },
   bleDevice: { padding: 13, borderRadius: 12, borderWidth: 1, borderColor: "#cedbdc", backgroundColor: "white" }, bleDeviceSelected: { borderColor: "#0a8c87", borderWidth: 2 }, deviceNameDark: { color: "#0a3037", fontSize: 14, fontWeight: "800" },
+  wifiHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }, wifiTitle: { color: "#59716f", fontSize: 9, fontWeight: "900", letterSpacing: .8 }, rescan: { color: "#0a8c87", fontSize: 10, fontWeight: "900" }, wifiNetwork: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#cedbdc", backgroundColor: "white", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, wifiNetworkSelected: { borderColor: "#0a8c87", borderWidth: 2, backgroundColor: "#e9f7f5" }, signal: { color: "#59716f", fontSize: 10, fontWeight: "700" },
   sectionLabel: { color: "#7d9a97", fontSize: 10, fontWeight: "900", letterSpacing: 1.2, marginTop: 14 }, telemetry: { padding: 17, borderRadius: 15, backgroundColor: "#134048" }, telemetryHeader: { flexDirection: "row", justifyContent: "space-between" }, deviceName: { color: "white", fontSize: 16, fontWeight: "700" }, time: { color: "#8eaaa7", fontSize: 10 }, topic: { color: "#69cfc7", fontSize: 10, marginTop: 5 }, payload: { color: "#d9efed", fontSize: 11, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", marginTop: 10 },
   empty: { color: "#829d9a", textAlign: "center", padding: 28 }, error: { color: "#ffc0af", textAlign: "center", fontSize: 12, paddingVertical: 12 },
 });

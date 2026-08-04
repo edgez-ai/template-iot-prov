@@ -1,10 +1,13 @@
 # Mobile companion
 
 The Expo app is the only device-onboarding client. It scans `PROV_` BLE
-advertisements, derives the serial, establishes an ESP-IDF Security 1 session,
-creates or reuses the Appwrite Device, sends its one-time MQTT credential to
-`mqtt-config`, and provisions Wi-Fi. It also uses Appwrite Auth and reads
-permitted telemetry directly from TablesDB.
+advertisements and derives the serial. After the operator selects a device,
+they enter the proof of possession (PoP) shown on its OLED. The app establishes
+an ESP-IDF Security 1 session, asks the ESP32 to scan nearby Wi-Fi networks,
+and lets the operator select an SSID and enter its password. It then creates or
+reuses the Appwrite Device, sends its one-time MQTT credential to `mqtt-config`,
+and provisions Wi-Fi. It also uses Appwrite Auth and reads permitted telemetry
+directly from TablesDB.
 Its Expo deep-link scheme is `edgez-devtools`, so application links begin with
 `edgez-devtools://`.
 
