@@ -54,6 +54,10 @@ server-side endpoint.
 - Infrastructure: `cd infra && npm run check`
 - Firmware: `cd firmware && pio run`
 
+`cd app && npm run android` must start Metro and open the project in the remote
+EdgeZ Android DevTools client at `127.0.0.1:5555`. Do not run a local Gradle or
+Expo native build unless the user explicitly requests one.
+
 Only run `infra/npm run deploy` when the user explicitly asks to change remote
 Appwrite state.
 `cd infra && npm run clean` deletes the template's deterministic remote

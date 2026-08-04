@@ -8,6 +8,7 @@ permitted telemetry directly from TablesDB.
 Its Expo deep-link scheme is `edgez-devtools`, so application links begin with
 `edgez-devtools://`.
 
-BLE provisioning uses a native module and does not run in stock Expo Go. Use
-`npm run android` to build and install an Android development application that
-contains the provisioning module.
+BLE provisioning uses a native module and does not run in stock Expo Go.
+`npm run android` starts Metro, forwards its port, and opens the project through
+`edgez-devtools://` in EdgeZ Android DevTools on `127.0.0.1:5555`. It does not
+run Gradle or build an APK. Override `ANDROID_SERIAL` or `EXPO_PORT` when needed.
