@@ -19,6 +19,9 @@ The home screen presents each device as a card with its connectivity status and
 latest internal chip temperature. Selecting a card opens the full-screen device
 history view, where the temperature line chart can show the last 30 minutes,
 1 hour, 6 hours, or 24 hours.
+The detail view can also delete the Device after native destructive
+confirmation. Appwrite removes its MQTT credential and route with the Device;
+existing telemetry rows are retained.
 Its Expo deep-link scheme is `edgez-devtools`, so application links begin with
 `edgez-devtools://`.
 

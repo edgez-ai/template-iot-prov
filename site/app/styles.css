@@ -51,6 +51,15 @@ input { width: 100%; padding: 14px 15px; border: 1px solid #cbd8de; border-radiu
 .mobile-back { display: none; }
 .detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .detail-heading h2 { margin: 0; font-size: clamp(28px, 3vw, 40px); letter-spacing: -1.2px; }
+.detail-actions { display: flex; align-items: center; gap: 14px; }
+.delete-device { padding: 9px 12px; border: 1px solid #e2a89c; border-radius: 9px; color: #b9472f; background: #fff3f0; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.delete-confirm { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 18px; padding: 16px 18px; border: 1px solid #e8b5aa; border-radius: 14px; background: #fff4f1; }
+.delete-confirm strong { color: #8f3422; }
+.delete-confirm p { max-width: 580px; margin: 4px 0 0; color: #7f5b53; font-size: 10px; line-height: 1.45; }
+.delete-confirm > div:last-child { display: flex; flex: none; gap: 8px; }
+.delete-confirm button { padding: 10px 12px; border: 0; border-radius: 9px; font-size: 9px; font-weight: 900; }
+.cancel-delete { color: #59716f; background: #e5ecea; }
+.confirm-delete { color: white; background: #b9472f; }
 .metric-card { display: grid; margin-top: 22px; padding: 22px; border-radius: 20px; color: white; background: #0a3037; }
 .metric-card span { color: #69cfc7; font-size: 9px; font-weight: 900; letter-spacing: 1px; }
 .metric-card strong { font-size: 48px; line-height: 1.12; letter-spacing: -2px; }
@@ -116,6 +125,10 @@ input { width: 100%; padding: 14px 15px; border: 1px solid #cbd8de; border-radiu
   .mobile-back { display: inline-flex; padding: 8px 0; border: 0; color: #0a8c87; background: none; font-size: 10px; font-weight: 900; text-transform: uppercase; }
   .detail-heading { margin-top: 14px; }
   .detail-heading h2 { font-size: 30px; }
+  .detail-actions { display: grid; justify-items: end; gap: 9px; }
+  .delete-confirm { display: grid; }
+  .delete-confirm > div:last-child { width: 100%; }
+  .delete-confirm button { flex: 1; }
   .metric-card strong { font-size: 44px; }
   .range-row { display: block; }
   .range-row > div { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 9px; }

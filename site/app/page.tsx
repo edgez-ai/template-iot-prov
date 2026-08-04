@@ -99,6 +99,22 @@ async function listDevices<T>() {
   return payload;
 }
 
+async function deleteDevice(deviceId: string) {
+  const jwt = await account.createJWT();
+  const response = await fetch(`${endpoint}/devices/${encodeURIComponent(deviceId)}`, {
+    method: "DELETE",
+    headers: {
+      "content-type": "application/json",
+      "x-appwrite-project": projectId,
+      "x-appwrite-jwt": jwt.jwt,
+    },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { message?: string };
+    throw new Error(payload.message || "Could not delete the Appwrite Device.");
+  }
+}
+
 export default function Home() {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -109,6 +125,8 @@ export default function Home() {
   const [historyPoints, setHistoryPoints] = useState<TemperaturePoint[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(true);
@@ -171,7 +189,18 @@ export default function Home() {
 
   async function signOut() {
     await account.deleteSession({ sessionId: "current" });
-    setUser(null); setDevices([]); setTelemetry([]); setSelectedDeviceId(""); setMobileDetailOpen(false);
+    setUser(null); setDevices([]); setTelemetry([]); setSelectedDeviceId(""); setMobileDetailOpen(false); setDeleteConfirm(false);
+  }
+
+  async function removeSelectedDevice() {
+    if (!selectedDevice) return;
+    setDeleting(true); setError("");
+    try {
+      await deleteDevice(selectedDevice.$id);
+      setSelectedDeviceId(""); setMobileDetailOpen(false); setDeleteConfirm(false);
+      await refresh();
+    } catch (caught) { setError(errorMessage(caught)); }
+    finally { setDeleting(false); }
   }
 
   const latestTemperatureByDevice = useMemo(() => {
@@ -197,6 +226,7 @@ export default function Home() {
   function selectDevice(device: Device) {
     setSelectedDeviceId(device.$id);
     setHistoryRange("1h");
+    setDeleteConfirm(false);
     setMobileDetailOpen(true);
   }
 
@@ -229,8 +259,9 @@ export default function Home() {
         </aside>
         <section className="device-detail">
           {selectedDevice ? <>
-            <button className="mobile-back" onClick={() => setMobileDetailOpen(false)}>‹ All devices</button>
-            <div className="detail-heading"><div><p className="eyebrow">DEVICE · {selectedDevice.serial}</p><h2>{selectedDevice.name}</h2></div><span className={`status ${selectedStatus === "Online" ? "online" : "offline"}`}><i />{selectedStatus}</span></div>
+            <button className="mobile-back" onClick={() => { setDeleteConfirm(false); setMobileDetailOpen(false); }}>‹ All devices</button>
+            <div className="detail-heading"><div><p className="eyebrow">DEVICE · {selectedDevice.serial}</p><h2>{selectedDevice.name}</h2></div><div className="detail-actions"><span className={`status ${selectedStatus === "Online" ? "online" : "offline"}`}><i />{selectedStatus}</span><button className="delete-device" onClick={() => setDeleteConfirm(true)}>Delete</button></div></div>
+            {deleteConfirm && <div className="delete-confirm" role="alert"><div><strong>Delete {selectedDevice.name}?</strong><p>This permanently removes the device and its MQTT credentials. Existing telemetry rows are not deleted.</p></div><div><button className="cancel-delete" onClick={() => setDeleteConfirm(false)} disabled={deleting}>Cancel</button><button className="confirm-delete" onClick={() => void removeSelectedDevice()} disabled={deleting}>{deleting ? "Deleting…" : "Delete device"}</button></div></div>}
             <div className="metric-card"><span>INTERNAL TEMPERATURE</span><strong>{selectedLatest ? `${selectedLatest.value.toFixed(1)}°C` : "—"}</strong><small>{selectedLatest ? `Updated ${relativeTime(selectedLatest.row.receivedAt)}` : "No readings received"}</small></div>
             <div className="range-row"><span>HISTORY RANGE</span><div>{historyRanges.map((range) => <button key={range.key} className={historyRange === range.key ? "active" : ""} onClick={() => setHistoryRange(range.key)} disabled={historyLoading}>{range.label}</button>)}</div></div>
             <div className="chart-card"><header><div><h3>Temperature history</h3><p>ESP32-S3 internal sensor · {historyPoints.length} readings</p></div>{historyLoading && <span className="spinner" />}</header><TemperatureChart points={historyPoints} duration={activeRange.duration} /><footer><span>{activeRange.label} ago</span><span>Now</span></footer>{historyError && <p className="inline-error">{historyError}</p>}</div>
