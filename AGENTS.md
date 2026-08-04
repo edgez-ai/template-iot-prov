@@ -13,8 +13,8 @@ trusted MQTT ingestion and is the only MQTT-to-TablesDB writer.
 
 | Path | Responsibility |
 | --- | --- |
-| `site/` | Next.js operator portal. Appwrite account sessions live here. |
-| `app/` | Expo + React Native companion app. |
+| `site/` | Read-only Next.js telemetry portal. Never create Devices here. |
+| `app/` | Expo + React Native BLE provisioning client; the only Device creator. |
 | `function/` | Appwrite Function; the only MQTT-to-TablesDB writer. |
 | `firmware/` | PlatformIO + ESP-IDF device client and BLE provisioning. |
 | `infra/` | Reproducible Appwrite CLI installer. |
@@ -24,10 +24,10 @@ Keep these boundaries. Never expose `APPWRITE_API_KEY` to clients. Authenticated
 web and mobile clients read TablesDB directly; only the Function writes MQTT
 telemetry.
 
-Web and mobile call Appwrite's Devices API and query `telemetry` directly with
-the active Appwrite session. Serial is the MQTT username and is unique within
-the Appwrite project. MQTT telemetry inherits only the built-in device's read
-permissions.
+Only mobile calls the Device API's create and credential endpoints. Web and
+mobile may list Devices and query `telemetry` directly with the active Appwrite
+session. Serial is the MQTT username and is unique within the Appwrite project.
+MQTT telemetry inherits only the built-in device's read permissions.
 
 Firmware derives serial as 12 uppercase Wi-Fi MAC hex characters, advertises
 `PROV_<serial>`, and accepts its Appwrite MQTT credential through the custom

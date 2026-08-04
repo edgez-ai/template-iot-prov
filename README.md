@@ -8,8 +8,8 @@ Channels while giving each folder a provisioning-specific responsibility.
 
 | Folder | Purpose |
 | --- | --- |
-| `site/` | Next.js operator portal for sign-in, devices, and telemetry |
-| `app/` | Expo + React Native companion app |
+| `site/` | Read-only Next.js portal for sign-in, devices, and telemetry |
+| `app/` | Expo + React Native BLE provisioning app |
 | `function/` | Trusted MQTT webhook that writes telemetry |
 | `firmware/` | PlatformIO + ESP-IDF device client |
 | `infra/` | Rerunnable Appwrite CLI installer |
@@ -21,7 +21,7 @@ Open `iot-provisioning.code-workspace` in VS Code to work on all five folders.
 1. The ESP32 derives the serial as the 12 uppercase hexadecimal characters of
    its Wi-Fi MAC and advertises `PROV_<serial>` over BLE.
 2. An operator creates an Appwrite account or signs in from web/mobile.
-3. Web or mobile strips the `PROV_` prefix, creates an Appwrite Device with that
+3. The mobile app strips the `PROV_` prefix, creates an Appwrite Device with that
    project-unique serial, then
    creates its one-time MQTT credential directly through the Devices API.
 4. The app sends that credential to the firmware's `mqtt-config` BLE endpoint.

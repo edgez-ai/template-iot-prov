@@ -1,12 +1,18 @@
+const { existsSync } = require("node:fs");
+const path = require("node:path");
+const { loadEnvFile } = require("node:process");
+
+const rootEnv = path.resolve(__dirname, "..", ".env.local");
+if (existsSync(rootEnv)) loadEnvFile(rootEnv);
+
 const appName = process.env.APP_NAME;
-const projectName = process.env.APPWRITE_PROJECT_NAME;
 const domainSuffix = process.env.DOMAIN_SUFFIX;
 const configuredEndpoint = process.env.APPWRITE_PUBLIC_ENDPOINT || process.env.APPWRITE_ENDPOINT;
 const projectId = process.env.APPWRITE_PROJECT_ID;
 const databaseId = process.env.DATABASE_ID;
 const telemetryTableId = process.env.TELEMETRY_TABLE_ID;
 
-if (!appName || !projectName || !domainSuffix || !configuredEndpoint || !projectId || !databaseId || !telemetryTableId) {
+if (!appName || !domainSuffix || !configuredEndpoint || !projectId || !databaseId || !telemetryTableId) {
   throw new Error("Appwrite project and telemetry table environment is incomplete");
 }
 
@@ -27,6 +33,7 @@ module.exports = {
     version: "1.0.0",
     orientation: "portrait",
     userInterfaceStyle: "light",
+    plugins: [["@orbital-systems/react-native-esp-idf-provisioning", { transport: "ble" }]],
     android: { package: platform },
     extra: {
       appwriteEndpoint: endpoint,

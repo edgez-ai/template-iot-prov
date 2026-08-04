@@ -1,11 +1,10 @@
 "use client";
 
 import { Account, Client, ID, Models, Query, TablesDB } from "appwrite";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Device = { $id: string; serial: string; name: string; status: string; enabled: boolean };
 type Telemetry = Models.Row & { deviceId: string; serial: string; channel: string; topic: string; payload: string; receivedAt: string };
-type MqttCredential = { clientId: string; username: string; password: string };
 
 const client = new Client()
   .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
@@ -21,15 +20,13 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
-async function devicesRequest<T>(path = "", options: RequestInit = {}) {
+async function listDevices<T>() {
   const jwt = await account.createJWT();
-  const response = await fetch(`${endpoint}/devices${path}`, {
-    ...options,
+  const response = await fetch(`${endpoint}/devices`, {
     headers: {
       "content-type": "application/json",
       "x-appwrite-project": projectId,
       "x-appwrite-jwt": jwt.jwt,
-      ...options.headers,
     },
   });
   const payload = await response.json() as T & { message?: string };
@@ -43,15 +40,12 @@ export default function Home() {
   const [telemetry, setTelemetry] = useState<Telemetry[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [serial, setSerial] = useState("");
-  const [name, setName] = useState("");
-  const [credential, setCredential] = useState<MqttCredential | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
     const [deviceResult, telemetryRows] = await Promise.all([
-      devicesRequest<{ devices: Device[] }>(),
+      listDevices<{ devices: Device[] }>(),
       tables.listRows({ databaseId, tableId: telemetryTableId, queries: [Query.orderDesc("receivedAt"), Query.limit(50)] }),
     ]);
     setDevices(deviceResult.devices);
@@ -80,29 +74,9 @@ export default function Home() {
     finally { setBusy(false); }
   }
 
-  async function addDevice(event: FormEvent) {
-    event.preventDefault();
-    if (!user) return;
-    setBusy(true); setError("");
-    try {
-      const device = await devicesRequest<Device>("", {
-        method: "POST",
-        body: JSON.stringify({ serial: serial.trim(), name: name.trim(), enabled: true }),
-      });
-      const mqtt = await devicesRequest<MqttCredential>(`/${encodeURIComponent(device.$id)}/credentials`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      setCredential(mqtt);
-      setSerial(""); setName("");
-      await refresh();
-    } catch (caught) { setError(errorMessage(caught)); }
-    finally { setBusy(false); }
-  }
-
   async function signOut() {
     await account.deleteSession({ sessionId: "current" });
-    setUser(null); setDevices([]); setTelemetry([]); setCredential(null);
+    setUser(null); setDevices([]); setTelemetry([]);
   }
 
   const deviceNames = useMemo(() => new Map(devices.map((device) => [device.$id, device.name])), [devices]);
@@ -120,7 +94,7 @@ export default function Home() {
     </section> : <section className="dashboard">
       <div className="heading-row"><div><p className="eyebrow">SIGNED IN AS {user.email}</p><h1>Device telemetry</h1></div><span className="count">DIRECT TABLESDB READS</span></div>
       <div className="columns">
-        <form className="panel" onSubmit={addDevice}><h2>Register an Appwrite device</h2><label>Device-generated serial<input value={serial} onChange={(e) => setSerial(e.target.value.toUpperCase())} pattern="[A-F0-9]{12}" maxLength={12} placeholder="AABBCCDDEEFF" required /></label><p>BLE advertises this as <code>PROV_{serial || "AABBCCDDEEFF"}</code>.</p><label>Display name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={128} placeholder="Workshop sensor" required /></label><button disabled={busy}>Create device + MQTT credential</button>{credential && <div className="credential"><small>COPY MQTT CREDENTIALS NOW</small><code>clientId: {credential.clientId}</code><code>username: {credential.username}</code><code>password: {credential.password}</code><p>Broker: mqtts://mqtt.edgez.ai:8883</p><p>Publish to projects/{projectId}/devices/{credential.username}/telemetry/&lt;channel&gt;</p><p>Subscribe to projects/{projectId}/devices/{credential.username}/commands/#</p></div>}</form>
+        <aside className="panel"><h2>Provisioned devices</h2><p>New devices can only be onboarded from the mobile app over BLE.</p>{devices.map((device) => <p key={device.$id}><strong>{device.name}</strong><br /><code>{device.serial}</code></p>)}{!devices.length && <p>No devices provisioned yet.</p>}</aside>
         <div className="stream">
           {telemetry.map((row) => <article key={row.$id}><header><strong>{deviceNames.get(row.deviceId) || row.serial}</strong><time>{new Date(row.receivedAt).toLocaleString()}</time></header><code>{row.topic}</code><pre>{JSON.stringify(JSON.parse(row.payload), null, 2)}</pre></article>)}
           {!telemetry.length && <p className="empty">No MQTT telemetry received yet.</p>}
