@@ -1,0 +1,11 @@
+{
+  "name": "iot-provisioning-infra",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "node install-appwrite.mjs",
+    "check": "node --check appwrite.mjs && node --check auth.mjs && node --check database.mjs && node --check function.mjs && node --check site.mjs && node --check install-appwrite.mjs"
+  },
+  "dependencies": { "appwrite-cli": "^20.0.0" }
+}
