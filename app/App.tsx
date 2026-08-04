@@ -1,7 +1,8 @@
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, PermissionsAndroid, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Account, Client, ID, Models, Query, TablesDB } from "react-native-appwrite";
 import { ESPDevice, ESPProvisionManager, ESPSecurity, ESPTransport } from "@orbital-systems/react-native-esp-idf-provisioning";
 
@@ -38,10 +39,10 @@ async function requestBlePermissions() {
 }
 
 async function deviceApi<T>(path = "", method: "GET" | "POST" = "GET", body?: object) {
-  const jwt = await account.createJWT();
   const response = await fetch(`${endpoint}/devices${path}`, {
     method,
-    headers: { "content-type": "application/json", "x-appwrite-project": config!.appwriteProjectId, "x-appwrite-jwt": jwt.jwt },
+    credentials: "include",
+    headers: { "content-type": "application/json", "x-appwrite-project": config.appwriteProjectId },
     body: body ? JSON.stringify(body) : undefined,
   });
   const payload = await response.json() as T & { message?: string };
@@ -78,7 +79,9 @@ export default function App() {
   }, [refresh]);
   useEffect(() => {
     if (!user) return;
-    const timer = setInterval(() => void refresh(), 5000);
+    const timer = setInterval(() => {
+      void refresh().catch((caught) => setError(messageOf(caught)));
+    }, 5000);
     return () => clearInterval(timer);
   }, [refresh, user]);
 
@@ -153,9 +156,9 @@ export default function App() {
   }
 
   const deviceNames = useMemo(() => new Map(devices.map((device) => [device.$id, device.name])), [devices]);
-  if (busy && !user) return <SafeAreaView style={styles.safe}><ActivityIndicator style={styles.loader} color="#62d8cf" size="large" /></SafeAreaView>;
+  if (busy && !user) return <SafeAreaProvider><SafeAreaView style={styles.safe}><ActivityIndicator style={styles.loader} color="#62d8cf" size="large" /></SafeAreaView></SafeAreaProvider>;
 
-  return <SafeAreaView style={styles.safe}><StatusBar style="light" /><KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+  return <SafeAreaProvider><SafeAreaView style={styles.safe}><StatusBar style="light" /><KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <View style={styles.header}><View><Text style={styles.eyebrow}>APPWRITE DEVICES · MQTT</Text><Text style={styles.title}>{user ? "Device telemetry" : "Operator access"}</Text></View>{user && <Pressable onPress={signOut}><Text style={styles.signOut}>SIGN OUT</Text></Pressable>}</View>
     {!user ? <View style={styles.auth}>
       <Text style={styles.hero}>Devices in.{"\n"}<Text style={styles.accent}>Signals out.</Text></Text>
@@ -180,7 +183,7 @@ export default function App() {
       {!telemetry.length && <Text style={styles.empty}>No MQTT telemetry yet.</Text>}
     </ScrollView>}
     {error ? <Text style={styles.error}>{error}</Text> : null}
-  </KeyboardAvoidingView></SafeAreaView>;
+  </KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({
