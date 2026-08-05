@@ -12,3 +12,5 @@ chart, statistics, and recent telemetry on the right. On mobile, devices are
 shown as app-style cards and selecting one opens a full-screen detail view.
 Both layouts require an explicit confirmation before deleting the selected
 device through the authenticated Appwrite Devices API.
+Appwrite filters device reads by the permissions assigned at creation, so the
+portal only lists Devices readable by the signed-in creator.

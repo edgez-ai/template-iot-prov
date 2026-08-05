@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { LayoutChangeEvent } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { Account, Client, ID, Models, Query, TablesDB } from "react-native-appwrite";
+import { Account, Client, ID, Models, Permission, Query, Role, TablesDB } from "react-native-appwrite";
 import { ESPDevice, ESPProvisionManager, ESPSecurity, ESPTransport } from "@orbital-systems/react-native-esp-idf-provisioning";
 import type { ESPWifiList } from "@orbital-systems/react-native-esp-idf-provisioning";
 
@@ -303,7 +303,7 @@ export default function App() {
   }
 
   async function provisionDevice() {
-    if (!selectedBleDevice || !bleConnected) return;
+    if (!user || !selectedBleDevice || !bleConnected) return;
     setBusy(true); setError(""); setProvisioningStatus("Preparing the device credential…");
     try {
       const serial = serialFromBleName(selectedBleDevice.name);
@@ -315,6 +315,11 @@ export default function App() {
           serial,
           name: name.trim() || serial,
           enabled: true,
+          permissions: [
+            Permission.read(Role.user(user.$id)),
+            Permission.update(Role.user(user.$id)),
+            Permission.delete(Role.user(user.$id)),
+          ],
         });
       }
       const mqtt = await deviceApi<Credential>(`/${encodeURIComponent(appwriteDevice.$id)}/credentials`, "POST", {});

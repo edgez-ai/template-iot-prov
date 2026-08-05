@@ -22,6 +22,9 @@ history view, where the temperature line chart can show the last 30 minutes,
 The detail view can also delete the Device after native destructive
 confirmation. Appwrite removes its MQTT credential and route with the Device;
 existing telemetry rows are retained.
+
+New Devices are created with explicit read, update, and delete permissions for
+the signed-in creator only. Telemetry inherits only that Device read permission.
 Its Expo deep-link scheme is `edgez-devtools`, so application links begin with
 `edgez-devtools://`.
 
