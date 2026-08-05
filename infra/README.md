@@ -4,6 +4,9 @@
 registers web and Android platforms, and installs the row-secured telemetry
 table, event-driven MQTT Function, static Next.js Site, variables, and domains.
 Devices and MQTT credentials use Appwrite's built-in per-project Devices API.
+The Appwrite CLI honors the deployment directory's `.gitignore`; both `site/`
+and `function/` exclude local `node_modules/` so dependencies are installed by
+the configured remote `npm install` command instead of uploaded.
 
 This changes remote state. Use `npm run check` for local syntax validation.
 
