@@ -71,6 +71,8 @@
       "timeout": 15,
       "enabled": true,
       "logging": true,
+      "buildSpecification": "s-1vcpu-1gb",
+      "runtimeSpecification": "s-1vcpu-512mb",
       "scopes": ["devices.read", "rows.write"],
       "vars": [
         { "key": "IOT_PROV_DATABASE_ID", "value": "iot-provisioning" },
