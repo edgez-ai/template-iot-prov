@@ -1,6 +1,7 @@
 {
   "version": 1,
   "name": "iot-provisioning",
+  "buildInstance": "tiny",
   "appwriteConfig": "appwrite.config.json",
   "deploymentEngine": {
     "name": "appwrite-cli",
