@@ -17,7 +17,10 @@ trusted MQTT ingestion and is the only MQTT-to-TablesDB writer.
 | `app/` | Expo + React Native BLE provisioning client; the only Device creator. |
 | `function/` | Appwrite Function; the only MQTT-to-TablesDB writer. |
 | `firmware/` | PlatformIO + ESP-IDF device client and BLE provisioning. |
+| `edgez.json` | EdgeZ solution and workspace manifest. |
+| `appwrite.config.json` | Declarative auth, platform, database, Function, and Site plan. |
 | `infra/` | Reproducible Appwrite CLI installer. |
+| `.github/workflows/` | Independent firmware and Android release/manual builds. |
 | `README.md` | Setup guide and environment contract. |
 
 Keep these boundaries. Never expose `APPWRITE_API_KEY` to clients. Authenticated

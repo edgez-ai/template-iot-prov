@@ -4,6 +4,9 @@ An Appwrite + Next.js + React Native + ESP32-S3 starter for authenticated device
 onboarding and MQTT telemetry. It mirrors the five-part structure of Hello
 Channels while giving each folder a provisioning-specific responsibility.
 
+[![Use this template](https://img.shields.io/badge/Use%20this-template-238636?style=for-the-badge&logo=github)](https://github.com/new?template_name=template-iot-prov&template_owner=edgez-ai)
+[![Deploy on EdgeZ](https://img.shields.io/badge/Deploy%20on-EdgeZ-6c5ce7?style=for-the-badge)](https://appwrite.edgez.ai/console/deploy?repo=https%3A%2F%2Fgithub.com%2Fedgez-ai%2Ftemplate-iot-prov)
+
 ## Repository layout
 
 | Folder | Purpose |
@@ -13,6 +16,11 @@ Channels while giving each folder a provisioning-specific responsibility.
 | `function/` | Trusted MQTT webhook that writes telemetry |
 | `firmware/` | PlatformIO + ESP-IDF device client |
 | `infra/` | Rerunnable Appwrite CLI installer |
+
+The root `edgez.json` selects `appwrite.config.json` as the complete,
+version-controlled solution plan. **Deploy on EdgeZ** applies the auth methods,
+web and Android platforms, telemetry database and indexes, MQTT Function, Site,
+variables, domains, and both source deployments after project selection.
 
 Open `iot-provisioning.code-workspace` in VS Code to work on all five folders.
 
@@ -89,3 +97,11 @@ only when you intend to provision or update Appwrite resources.
 Run `cd infra && npm run clean` to remove this template's Site, Function,
 database, proxy rule, and auth platforms. Cleanup preserves project users,
 Devices, and project-wide authentication settings.
+
+## Release builds
+
+The separate `Build firmware` and `Build mobile app` GitHub Actions workflows
+run when a GitHub Release is published and can each be started independently
+with **Run workflow**. Firmware produces a PlatformIO archive; mobile produces
+Android APK and AAB files. Workflow-run artifacts are always retained, while
+release-triggered builds are also attached to the GitHub Release.
